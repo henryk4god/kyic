@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Offer Framework SaaS</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #4f46e5; --bg: #f8fafc; --text: #1e293b;
+            --accent: #10b981; --card-shadow: 0 10px 15px -3px rgba(0,0,0,0.1);
+        }
+        body { font-family: 'Poppins', sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 20px; }
+        .app-container { max-width: 800px; margin: 0 auto; }
+        .card { background: white; padding: 30px; border-radius: 16px; box-shadow: var(--card-shadow); animation: fadeIn 0.4s ease-out; position: relative; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } }
+        
+        .step-indicator { display: flex; gap: 10px; margin-bottom: 20px; }
+        .dot { height: 8px; flex: 1; background: #e2e8f0; border-radius: 4px; transition: 0.3s; }
+        .dot.active { background: var(--primary); }
+
+        input, textarea { width: 100%; padding: 12px; margin: 10px 0; border: 1.5px solid #e2e8f0; border-radius: 8px; box-sizing: border-box; }
+        
+        .btn-group { display: flex; gap: 10px; margin-top: 20px; }
+        button { background: var(--primary); color: white; border: none; padding: 15px; border-radius: 8px; flex: 1; font-weight: 600; cursor: pointer; transition: 0.2s; }
+        button.secondary { background: #64748b; }
+        button.copy-btn { background: var(--accent); position: absolute; top: 20px; right: 20px; width: auto; padding: 8px 15px; font-size: 12px; }
+        button:hover { filter: brightness(1.1); }
+        button:disabled { background: #94a3b8; }
+
+        .comp-item { border: 1px solid #e2e8f0; padding: 12px; margin: 8px 0; border-radius: 8px; cursor: pointer; transition: 0.2s; }
+        .comp-item:hover { border-color: var(--primary); }
+        .comp-item.selected { border-color: var(--primary); background: #eef2ff; font-weight: bold; }
+        
+        .output { background: #f1f5f9; padding: 20px; border-radius: 8px; margin-top: 15px; white-space: pre-wrap; font-size: 14px; line-height: 1.6; border-left: 5px solid var(--primary); }
+        .loader { border: 3px solid #f3f3f3; border-top: 3px solid var(--primary); border-radius: 50%; width: 24px; height: 24px; animation: spin 1s linear infinite; display: none; margin: 15px auto; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+
+<div class="app-container">
+    <div class="step-indicator" id="dots"></div>
+    <div class="card">
+        <button class="copy-btn" onclick="copyResult()">Copy Result</button>
+        <h2 id="title">Stage 1: Big Promise Engine</h2>
+        <div id="input-area"></div>
+        <div class="loader" id="loader"></div>
+        <div id="output-area" class="output" style="display:none;"></div>
+        
+        <div class="btn-group">
+            <button id="main-btn" onclick="handleAction()">Process Stage</button>
+            <button id="next-btn" class="secondary" onclick="moveToNext()" style="display:none;">Proceed to Next Stage →</button>
+        </div>
+    </div>
+</div>
+
+<script>
+const GAS_URL = "https://script.google.com/macros/s/AKfycbx8LrP0Cu2O0QhF9tktM_gT5livoMCdc6moLJP4-H6fSBaYexxyQkoaWvTt78sd7x0iyg/exec"; // REPLACE THIS
+let currentStep = 1;
+let store = { avatar: "", result: "", pain: "", promise: "", competitors: [], selectedComps: [], analysis: "", patterns: "", gaps: "", positioning: "" };
+
+const STAGES = {
+    1: { 
+        title: "Big Promise Engine", 
+        sys: "Act as a world-class offer strategist. Generate: 3 refined variations, 1 final recommended Big Promise. Rules: One sentence each, no hype.",
+        ui: () => `<input id="av" placeholder="Target Avatar"><input id="res" placeholder="Desired Result"><input id="pn" placeholder="Main Pain">`,
+        inputFn: () => { 
+            store.avatar = document.getElementById('av').value; 
+            store.result = document.getElementById('res').value; 
+            store.pain = document.getElementById('pn').value;
+            return `Avatar: ${store.avatar}, Result: ${store.result}, Pain: ${store.pain}`;
+        }
+    },
+    2: { 
+        title: "Market Radar", 
+        sys: "List top 10 products for this promise. Format: 'Name | Type | Price'",
+        inputFn: () => `Big Promise: ${store.promise}`
+    },
+    3: { 
+        title: "Offer X-Ray", 
+        sys: "Analyze these competitors relative to the promise. Output with bullet points.",
+        inputFn: () => `Analyze these: ${store.selectedComps.join(", ")} for Promise: ${store.promise}`
+    },
+    4: { title: "Pattern Miner", sys: "Identify repeated promises and overused mechanisms.", inputFn: () => store.analysis },
+    5: { title: "Gap Finder", sys: "Identify underserved pains and where competitors underdeliver.", inputFn: () => `Patterns: ${store.patterns}` },
+    6: { title: "Positioning Engine", sys: "Generate 1 sharper promise, 1 unique mechanism, 3 angles.", inputFn: () => `Gaps: ${store.gaps}` },
+    7: { title: "Offer Builder", sys: "Generate headline, sub-headlines, bonuses, and guarantee.", inputFn: () => store.positioning }
+};
+
+function init() {
+    const dots = document.getElementById('dots');
+    for(let i=1; i<=7; i++) dots.innerHTML += `<div class="dot ${i==1?'active':''}" id="dot-${i}"></div>`;
+    renderUI();
+}
+
+function renderUI() {
+    const stage = STAGES[currentStep];
+    document.getElementById('title').innerText = `Stage ${currentStep}: ${stage.title}`;
+    document.getElementById('input-area').innerHTML = stage.ui ? stage.ui() : `<p>Ready to process data from previous stage...</p>`;
+    document.getElementById('output-area').style.display = 'none';
+    document.getElementById('next-btn').style.display = 'none';
+    document.getElementById('main-btn').style.display = 'block';
+}
+
+async function handleAction() {
+    const loader = document.getElementById('loader');
+    const out = document.getElementById('output-area');
+    const mainBtn = document.getElementById('main-btn');
+
+    loader.style.display = 'block';
+    mainBtn.disabled = true;
+
+    try {
+        const params = new URLSearchParams({ systemPrompt: STAGES[currentStep].sys, userMessage: STAGES[currentStep].inputFn() });
+        const res = await fetch(GAS_URL, { method: 'POST', body: params });
+        const data = await res.json();
+        const content = data.choices[0].message.content;
+
+        saveData(content);
+        out.innerText = content;
+        out.style.display = 'block';
+
+        if (currentStep === 2) {
+            renderSelection(content);
+            mainBtn.style.display = 'none';
+        } else {
+            document.getElementById('next-btn').style.display = 'block';
+        }
+    } catch (e) { alert("Error connecting to AI. Check console."); }
+    finally { loader.style.display = 'none'; mainBtn.disabled = false; }
+}
+
+function renderSelection(text) {
+    const lines = text.split('\n').filter(l => l.includes('|'));
+    const inputArea = document.getElementById('input-area');
+    inputArea.innerHTML = "<h4>Select 3-5 Competitors:</h4>";
+    lines.forEach(line => {
+        const div = document.createElement('div');
+        div.className = 'comp-item';
+        div.innerText = line;
+        div.onclick = () => {
+            div.classList.toggle('selected');
+            const val = div.innerText;
+            store.selectedComps.includes(val) ? store.selectedComps = store.selectedComps.filter(i => i!==val) : store.selectedComps.push(val);
+            document.getElementById('next-btn').style.display = store.selectedComps.length >= 3 ? 'block' : 'none';
+        };
+        inputArea.appendChild(div);
+    });
+}
+
+function moveToNext() {
+    if (currentStep < 7) {
+        currentStep++;
+        document.querySelectorAll('.dot').forEach(d => d.classList.remove('active'));
+        document.getElementById(`dot-${currentStep}`).classList.add('active');
+        renderUI();
+    } else {
+        alert("Framework Complete!");
+    }
+}
+
+function copyResult() {
+    const text = document.getElementById('output-area').innerText;
+    if(!text) return alert("Nothing to copy yet!");
+    navigator.clipboard.writeText(text);
+    alert("Copied to clipboard!");
+}
+
+function saveData(content) {
+    if(currentStep === 1) store.promise = content;
+    if(currentStep === 3) store.analysis = content;
+    if(currentStep === 4) store.patterns = content;
+    if(currentStep === 5) store.gaps = content;
+    if(currentStep === 6) store.positioning = content;
+}
+
+init();
+</script>
+</body>
+</html>
